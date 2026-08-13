@@ -265,7 +265,8 @@ async function main() {
   })();
   log("querying COROS sport records ...");
   const result = await callTool("querySportRecords", {
-    startDate: "20200101", endDate, sportTypeCodes: [65535], limit: 5000,
+    // 仅跑步：100 户外跑 / 101 室内跑 / 102 越野跑 / 103 跑道跑（排除徒步 104、爬山 105、体能训练等）
+    startDate: "20200101", endDate, sportTypeCodes: [100, 101, 102, 103], limit: 5000,
   });
   const records = parseRecordsText(toolText(result));
   log(`got ${records.length} records from COROS`);
