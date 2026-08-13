@@ -58,7 +58,17 @@ python -m http.server 8080
 - **单次详情**：选中活动后展示配速 / 心率沿时间变化曲线
 - **活动列表**：可搜索、排序，点击行联动地图与详情
 
-> 图表库从 CDN（jsdelivr / unpkg）加载，需联网。数据由 `data.js` 提供（`tools/generate_data.mjs` 生成）。
+> 图表库已本地化到 `vendor/`（无需 CDN），仅地图底图瓦片需联网。数据由 `data.js` 提供（`tools/generate_data.mjs` 生成）。
+
+## 在线访问（GitHub Pages）
+
+已部署到 GitHub Pages，可通过以下网址直接访问（分享给朋友）：
+
+**https://yifeigit.github.io/running-dashboard/**
+
+- 每日自动同步：GitHub Actions 每天 **北京时间 08:00** 自动从 COROS 拉取最新数据并更新网页
+- 手动触发：仓库 → Actions → Daily Sync → Run workflow
+- 密钥：`COROS_TOKEN`（COROS 登录凭证，自动轮换写回）、`GH_TOKEN`（GitHub token）
 
 ## 一键同步（以后只用高驰）
 
