@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人运动健康数据看板</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg2: #0d1220;
+    --card: #121a2a;
+    --card2: #0f1626;
+    --border: #1e2a3e;
+    --border2: #2a3a55;
+    --text: #e6edf3;
+    --muted: #8b98ab;
+    --accent: #58a6ff;
+    --cyan: #38bdf8;
+    --teal: #2dd4bf;
+    --violet: #a78bfa;
+    --orange: #ff7a45;
+    --gold: #fbbf24;
+    --red: #f87171;
+    --green: #4ade80;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1100px 620px at 78% -8%, #1b2c4f 0%, transparent 55%),
+      radial-gradient(820px 540px at -6% 24%, #132641 0%, transparent 50%),
+      radial-gradient(720px 500px at 50% 112%, #0e1b32 0%, transparent 55%),
+      linear-gradient(rgba(88,166,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(88,166,255,.03) 1px, transparent 1px),
+      var(--bg);
+    background-size: auto, auto, auto, 44px 44px, 44px 44px, auto;
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    line-height: 1.5;
+    padding-bottom: 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0a0e17; }
+  ::-webkit-scrollbar-thumb { background: #22314a; border-radius: 6px; border: 2px solid #0a0e17; }
+  ::-webkit-scrollbar-thumb:hover { background: #31466a; }
+  a { color: var(--accent); text-decoration: none; }
+
+  nav {
+    position: sticky; top: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 28px;
+    background: rgba(10, 14, 23, 0.82);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+  nav .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+  nav .links { display: flex; gap: 18px; font-size: 13.5px; color: var(--muted); flex-wrap: wrap; }
+  nav .links a { color: var(--muted); transition: color .15s; }
+  nav .links a:hover { color: var(--text); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+  .hero { padding: 30px 0 8px; }
+  .hero h1 { font-size: 28px; letter-spacing: .5px; }
+  .hero h1 .en { color: var(--muted); font-weight: 400; font-size: 15px; margin-left: 8px; }
+  .hero .sub { color: var(--muted); margin-top: 6px; font-size: 14px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 22px 0; }
+  .kpi {
+    background: linear-gradient(160deg, var(--card), var(--card2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative; overflow: hidden;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .kpi:hover {
+    transform: translateY(-3px);
+    border-color: var(--border2);
+    box-shadow: 0 12px 32px rgba(0,0,0,.45), inset 0 0 0 1px rgba(88,166,255,.15);
+  }
+  .kpi::after {
+    content: ""; position: absolute; right: -30px; top: -30px; width: 90px; height: 90px;
+    border-radius: 50%; background: radial-gradient(circle, rgba(88,166,255,.14), transparent 70%);
+  }
+  .kpi .label { color: var(--muted); font-size: 12.5px; letter-spacing: .4px; }
+  .kpi .value { font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .value .unit { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .kpi .extra { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .kpi.accent .value { color: var(--accent); }
+  .kpi.cyan .value { color: var(--cyan); }
+  .kpi.teal .value { color: var(--teal); }
+  .kpi.gold .value { color: var(--gold); }
+  .kpi.green .value { color: var(--green); }
+  .kpi.violet .value { color: var(--violet); }
+
+  section { margin-top: 34px; }
+  .sec-title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+  .sec-title h2 { font-size: 19px; position: relative; padding-left: 15px; }
+  .sec-title h2::before {
+    content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 4px; height: 18px; border-radius: 2px;
+    background: linear-gradient(180deg, var(--cyan), var(--accent));
+    box-shadow: 0 0 8px rgba(56,189,248,.55);
+  }
+  .sec-title .hint { color: var(--muted); font-size: 12.5px; }
+
+  .card {
+    background: linear-gradient(160deg, var(--card), var(--card2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    position: relative;
+    box-shadow: 0 6px 28px rgba(0,0,0,.28);
+  }
+  .card::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(88,166,255,.4), transparent);
+    border-radius: var(--radius) var(--radius) 0 0;
+    pointer-events: none;
+  }
+
+  /* ---------- fitness cards ---------- */
+  .fitness-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 14px; }
+  .f-card { background: linear-gradient(160deg, var(--card), var(--card2)); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .f-card .f-label { color: var(--muted); font-size: 12.5px; }
+  .f-card .f-big { font-size: 40px; font-weight: 800; margin-top: 4px; }
+  .f-card .f-big .u { font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .f-card .f-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .preds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pred { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+  .pred .p-name { color: var(--muted); font-size: 12px; }
+  .pred .p-time { font-size: 20px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; color: var(--cyan); }
+  .devices { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .dev { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; font-size: 13px; color: var(--muted); }
+  .dev b { color: var(--text); font-weight: 600; }
+
+  /* ---------- 训练统计条 ---------- */
+  .stats-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .stat {
+    background: linear-gradient(160deg, var(--card), var(--card2));
+    border: 1px solid var(--border); border-radius: 12px; padding: 15px 16px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .stat::after { content: ""; position: absolute; left: 20%; right: 20%; bottom: 0; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(56,189,248,.5), transparent); }
+  .stat .s-value { font-size: 23px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--cyan); }
+  .stat .s-value .u { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .stat .s-label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  @media (max-width: 900px) { .stats-bar { grid-template-columns: repeat(3, 1fr); } }
+
+  /* ---------- map ---------- */
+  #map { height: 560px; border-radius: var(--radius); border: 1px solid var(--border); background: #0a0e17; }
+  .map-legend { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .map-legend .lg { display: flex; align-items: center; gap: 8px; }
+  .pace-bar { width: 160px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #ff5d3a, #fbbf24, #38bdf8); }
+  .leaflet-tooltip.run-tip {
+    background: rgba(13,18,32,.92); border: 1px solid var(--border2); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  }
+  .leaflet-tooltip.run-tip b { color: var(--cyan); }
+  .leaflet-control-zoom a { background: var(--card) !important; color: var(--text) !important; border-color: var(--border) !important; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid .card { min-width: 0; }
+  .chart { height: 320px; width: 100%; }
+  .chart.tall { height: 360px; }
+  .full { grid-column: 1 / -1; }
+
+  #detailChart { height: 360px; width: 100%; }
+  .detail-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+  .detail-meta b { color: var(--text); font-weight: 600; }
+
+  /* ---------- gallery (纯展示) ---------- */
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+  .g-card { background: linear-gradient(160deg, var(--card), var(--card2)); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .g-thumb { width: 100%; aspect-ratio: 3 / 2; display: block; background: #0b1220; }
+  .g-body { padding: 6px 8px 7px; }
+  .g-date { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .g-dist { font-size: 14px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .g-dist span { font-size: 10px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .g-loc { font-size: 10px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gallery-sort { margin-left: auto; display: flex; gap: 6px; }
+  .sort-btn {
+    background: var(--card2); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: 8px; font-size: 12.5px; cursor: pointer; transition: all .15s;
+  }
+  .sort-btn:hover { color: var(--text); border-color: var(--border2); }
+  .sort-btn.active { color: var(--cyan); border-color: var(--cyan); background: rgba(56,189,248,.1); }
+
+  /* ---------- table ---------- */
+  .table-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .table-tools input, .table-tools select {
+    background: var(--card2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none;
+  }
+  .table-tools input:focus, .table-tools select:focus { border-color: var(--accent); }
+  .table-tools input { width: 240px; }
+  .table-wrap { overflow: auto; max-height: 520px; border-radius: var(--radius); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { position: sticky; top: 0; z-index: 2; background: var(--card2); color: var(--muted); text-align: left; padding: 10px 12px; font-weight: 600; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  thead th:hover { color: var(--text); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover { background: rgba(88,166,255,.07); }
+  tbody tr.active { background: rgba(88,166,255,.14); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  footer { margin-top: 40px; text-align: center; color: var(--muted); font-size: 12px; }
+
+  /* ---------- 入场动画 ---------- */
+  .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: 1fr; }
+    .fitness-grid { grid-template-columns: 1fr; }
+    #map { height: 420px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><span class="dot"></span> 个人运动健康看板 <span class="en">SPORTS & HEALTH</span></div>
+  <div class="links">
+    <a href="#overview">总览</a>
+    <a href="#fitness">体能</a>
+    <a href="#map">地图</a>
+    <a href="#charts">训练分析</a>
+    <a href="#health">健康恢复</a>
+    <a href="#detail">活动详情</a>
+    <a href="#list">活动列表</a>
+    <a href="#gallery">轨迹图集</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="hero" id="overview">
+    <h1>我的运动健康数据看板 <span class="en" id="rangeLabel"></span></h1>
+    <div class="sub">跑步训练 · 体能评估 · 恢复监测 · 点击任意轨迹或列表项联动查看</div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <!-- FITNESS -->
+  <section id="fitness">
+    <div class="sec-title"><h2>⚡ 体能评估</h2><span class="hint">来自 COROS 训练平台</span></div>
+    <div class="fitness-grid">
+      <div class="f-card">
+        <div class="f-label">最大摄氧量 VO₂max</div>
+        <div class="f-big" style="color:var(--accent)" id="fVo2">—<span class="u">ml/kg/min</span></div>
+        <div class="f-sub" id="fLevel">跑力等级 —</div>
+      </div>
+      <div class="f-card">
+        <div class="f-label">阈值配速 &amp; 恢复</div>
+        <div class="f-big" style="color:var(--teal)" id="fThreshold">—<span class="u">/km</span></div>
+        <div class="f-sub" id="fRecovery">恢复 —</div>
+      </div>
+      <div class="f-card">
+        <div class="f-label">比赛预测</div>
+        <div class="preds" id="fPreds"></div>
+      </div>
+    </div>
+    <div class="devices" id="fDevices"></div>
+  </section>
+
+  <!-- 训练统计 -->
+  <section id="stats">
+    <div class="sec-title"><h2>📈 训练统计</h2><span class="hint">累计技术指标</span></div>
+    <div class="stats-bar" id="statsBar"></div>
+  </section>
+
+  <!-- MAP -->
+  <section id="map">
+    <div class="sec-title"><h2>🗺️ 跑步轨迹地图</h2><span class="hint">颜色 = 配速（红快 → 蓝慢）</span></div>
+    <div id="map"></div>
+    <div class="map-legend">
+      <span class="lg"><span class="pace-bar"></span> 快 <span style="color:var(--muted)">←——→</span> 慢</span>
+      <span class="lg"><span class="sw" style="width:22px;height:4px;border-radius:2px;background:#ffd166;box-shadow:0 0 8px #ffd166;display:inline-block"></span> 选中的轨迹</span>
+      <span class="hint" id="mapCount"></span>
+    </div>
+  </section>
+
+  <!-- TRAINING CHARTS -->
+  <section id="charts">
+    <div class="sec-title"><h2>📊 训练分析</h2><span class="hint">里程、配速、心率与强度分布</span></div>
+    <div class="grid">
+      <div class="card"><div class="chart" id="cMonthly"></div></div>
+      <div class="card"><div class="chart" id="cPaceZones"></div></div>
+      <div class="card"><div class="chart" id="cPace"></div></div>
+      <div class="card"><div class="chart" id="cHr"></div></div>
+      <div class="card full"><div class="chart tall" id="cHrZones"></div></div>
+      <div class="card full"><div class="chart tall" id="cScatter"></div></div>
+      <div class="card full"><div class="chart tall" id="cWeekday"></div></div>
+      <div class="card full"><div class="chart tall" id="cCalendar"></div></div>
+    </div>
+  </section>
+
+  <!-- HEALTH CHARTS -->
+  <section id="health">
+    <div class="sec-title"><h2>🏥 健康与恢复</h2><span class="hint">训练负荷 · HRV · 静息心率 · 睡眠 · 压力</span></div>
+    <div class="grid">
+      <div class="card full"><div class="chart tall" id="cLoad"></div></div>
+      <div class="card"><div class="chart" id="cHrv"></div></div>
+      <div class="card"><div class="chart" id="cRestHR"></div></div>
+      <div class="card"><div class="chart" id="cStress"></div></div>
+      <div class="card full"><div class="chart tall" id="cSleep"></div></div>
+    </div>
+  </section>
+
+  <!-- DETAIL -->
+  <section id="detail">
+    <div class="sec-title"><h2>🔍 单次活动详情</h2><span class="hint">配速与心率沿时间变化</span></div>
+    <div class="card">
+      <div class="detail-meta" id="detailMeta"></div>
+      <div id="detailChart"></div>
+    </div>
+  </section>
+
+  <!-- LIST -->
+  <section id="list">
+    <div class="sec-title"><h2>📋 活动列表</h2><span class="hint">点击行联动地图与详情 · 点击表头排序</span></div>
+    <div class="card">
+      <div class="table-tools">
+        <input id="searchBox" type="text" placeholder="搜索日期 / 地点 / 距离…">
+        <span class="hint" id="rowCount"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="activityTable">
+          <thead>
+            <tr>
+              <th data-key="date">日期</th>
+              <th data-key="distanceKm">距离</th>
+              <th data-key="durationSeconds">时长</th>
+              <th data-key="avgPaceSecPerKm">配速</th>
+              <th data-key="avgHeartRate">心率</th>
+              <th data-key="calories">卡路里</th>
+              <th data-key="location">地点</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALLERY (纯展示，无交互) -->
+  <section id="gallery">
+    <div class="sec-title">
+      <h2>🃏 轨迹图集</h2>
+      <span class="hint">全部轨迹缩略图拼接 · 颜色 = 配速（红快 → 蓝慢）</span>
+      <div class="gallery-sort">
+        <button class="sort-btn active" data-sort="date">按日期</button>
+        <button class="sort-btn" data-sort="random">🎲 随机</button>
+      </div>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"></div>
+  </section>
+
+  <footer>数据由 COROS MCP 导出并整合 · ECharts + Leaflet</footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+"use strict";
+const D = window.RUN_DATA;
+const acts = D.activities.slice();
+const tracks = D.tracks;
+const health = D.health || {};
+
+/* ================= helpers ================= */
+const $ = (s) => document.querySelector(s);
+const fmtPace = (sec) => {
+  if (sec == null || !isFinite(sec)) return "—";
+  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+};
+const fmtDur = (sec) => {
+  if (sec == null) return "—";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m ${Math.round(sec % 60)}s`;
+};
+const distKm = (a) => a.distanceKm || 0;
+const durSec = (a) => a.durationSeconds || 0;
+const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+const round1 = (v) => Math.round(v * 10) / 10;
+
+// 数字滚动动画（ease-out cubic）
+function countUp(el, target, decimals = 0, duration = 1100) {
+  const start = performance.now();
+  const fmt = (v) => v.toFixed(decimals);
+  function frame(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmt(target * eased);
+    if (t < 1) requestAnimationFrame(frame);
+    else el.textContent = fmt(target);
+  }
+  requestAnimationFrame(frame);
+}
+
+// pace -> color (fast warm, slow cool)
+function paceColor(sec) {
+  if (sec == null || !isFinite(sec)) return "#38bdf8";
+  const t = Math.min(1, Math.max(0, (sec - 300) / 130));
+  const hue = 200 - t * 185;
+  return `hsl(${hue}, 85%, 58%)`;
+}
+
+const totalDist = sum(acts, distKm);
+const totalDur = sum(acts, durSec);
+const totalCal = sum(acts, (a) => a.calories || 0);
+const withHr = acts.filter((a) => a.avgHeartRate != null);
+const avgHr = withHr.length ? sum(withHr, (a) => a.avgHeartRate) / withHr.length : 0;
+const dates = acts.map((a) => a.date).filter(Boolean).sort();
+const firstDate = dates[0], lastDate = dates[dates.length - 1];
+const daysSpan = Math.max(1, Math.round((new Date(lastDate) - new Date(firstDate)) / 86400000) + 1);
+
+/* ================= KPI ================= */
+function renderKpis() {
+  const fit = health.fitness || {};
+  const rec = health.recovery || {};
+  const rhr = (health.restingHR || []).slice(-1)[0];
+  const items = [
+    { cls: "accent", label: "最大摄氧量", num: Number(fit.vo2max) || 0, dec: 0, unit: "VO₂max", extra: `跑力等级 ${fit.runningLevel ?? "—"}` },
+    { cls: "teal", label: "阈值配速", txt: fit.thresholdPace ?? "—", unit: "/km", extra: "乳酸阈值速度" },
+    { cls: "green", label: "恢复状态", txt: rec.recovery ? rec.recovery + "%" : "—", unit: "", extra: rec.level ?? "" },
+    { cls: "violet", label: "静息心率", num: rhr ? Number(rhr.bpm) : 0, dec: 0, unit: "bpm", extra: "近 30 天最新" },
+    { cls: "accent", label: "累计里程", num: totalDist, dec: 1, unit: "km", extra: `共 ${acts.length} 次跑步` },
+    { cls: "", label: "累计时长", num: totalDur / 3600, dec: 1, unit: "小时", extra: `约 ${(totalDur / 86400).toFixed(1)} 天` },
+    { cls: "gold", label: "平均配速", txt: fmtPace(totalDur / totalDist), unit: "/km", extra: "总时长 ÷ 总距离" },
+    { cls: "", label: "全马预测", txt: fit.predictions?.marathon ?? "—", unit: "", extra: "比赛成绩预测" },
+  ];
+  $("#kpis").innerHTML = items.map((k) => `
+    <div class="kpi ${k.cls}">
+      <div class="label">${k.label}</div>
+      <div class="value">${k.num != null ? `<span class="cv" data-v="${k.num}" data-d="${k.dec}">0</span>` : k.txt}<span class="unit">${k.unit}</span></div>
+      <div class="extra">${k.extra}</div>
+    </div>`).join("");
+  document.querySelectorAll("#kpis .cv").forEach((el) => countUp(el, Number(el.dataset.v), Number(el.dataset.d || 0)));
+  $("#rangeLabel").textContent = `${firstDate} ~ ${lastDate}`;
+}
+
+/* ================= FITNESS ================= */
+function renderFitness() {
+  const fit = health.fitness || {};
+  const rec = health.recovery || {};
+  $("#fVo2").innerHTML = `${fit.vo2max ?? "—"}<span class="u">ml/kg/min</span>`;
+  $("#fLevel").textContent = `跑力等级 ${fit.runningLevel ?? "—"} · 阈值配速 ${fit.thresholdPace ?? "—"}/km`;
+  $("#fThreshold").innerHTML = `${fit.thresholdPace ?? "—"}<span class="u">/km</span>`;
+  $("#fRecovery").textContent = `恢复 ${rec.recovery ?? "—"}% · ${rec.level ?? ""}`;
+  const p = fit.predictions || {};
+  const preds = [["5 km", p["5k"]], ["10 km", p["10k"]], ["半马", p.half], ["全马", p.marathon]];
+  $("#fPreds").innerHTML = preds.map(([n, t]) => `
+    <div class="pred"><div class="p-name">${n}</div><div class="p-time">${t ?? "—"}</div></div>`).join("");
+  const devs = health.devices || [];
+  $("#fDevices").innerHTML = devs.map((d) => `<div class="dev"><b>${d.name}</b>${d.model ? " · " + d.model : ""}</div>`).join("");
+}
+
+/* ================= 训练统计 ================= */
+function activeWeeks() {
+  const weeks = new Set();
+  for (const a of acts) {
+    if (!a.date) continue;
+    const d = new Date(a.date + "T00:00:00");
+    const day = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - day);
+    weeks.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  return weeks.size;
+}
+function renderStats() {
+  const ascent = sum(acts, (a) => a.totalAscentM || 0);
+  const powerArr = acts.filter((a) => a.avgPower != null).map((a) => a.avgPower);
+  const avgPower = powerArr.length ? sum(powerArr, (v) => v) / powerArr.length : null;
+  const maxDist = Math.max(...acts.map(distKm));
+  const fastArr = acts.filter((a) => a.avgPaceSecPerKm).map((a) => a.avgPaceSecPerKm);
+  const fastest = fastArr.length ? Math.min(...fastArr) : null;
+  const stats = [
+    { v: ascent.toFixed(0), u: "m", l: "累计爬升" },
+    { v: avgPower != null ? avgPower.toFixed(0) : "—", u: "W", l: "平均功率" },
+    { v: maxDist.toFixed(1), u: "km", l: "最长单次距离" },
+    { v: fastest != null ? fmtPace(fastest) : "—", u: "/km", l: "最快配速" },
+    { v: activeWeeks(), u: "周", l: "活跃训练周" },
+    { v: (totalCal / 1000).toFixed(1), u: "千卡", l: "累计消耗" },
+  ];
+  $("#statsBar").innerHTML = stats.map((s) => `
+    <div class="stat"><div class="s-value">${s.v}<span class="u">${s.u}</span></div><div class="s-label">${s.l}</div></div>`).join("");
+}
+
+/* ================= ECharts base ================= */
+const chartTheme = {
+  backgroundColor: "transparent",
+  textStyle: { color: "#e6edf3" },
+  legend: { textStyle: { color: "#8b98ab", fontSize: 12 }, itemGap: 12, itemWidth: 12, itemHeight: 8, icon: "roundRect" },
+  tooltip: { backgroundColor: "rgba(18,26,42,.96)", borderColor: "#2a3a55", textStyle: { color: "#e6edf3", fontSize: 12 }, padding: [8, 12] },
+};
+const charts = {};
+function initChart(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const c = echarts.init(el, null, { renderer: "canvas" });
+  charts[id] = c;
+  return c;
+}
+function onResize() { Object.values(charts).forEach((c) => c && c.resize()); }
+window.addEventListener("resize", onResize);
+const AXIS = { axisLine: { lineStyle: { color: "#2a3a55" } }, axisLabel: { color: "#8b98ab" }, splitLine: { lineStyle: { color: "#182236" } } };
+
+/* ================= training charts ================= */
+function monthlyAgg() {
+  const map = new Map();
+  for (const a of acts) {
+    if (!a.date) continue;
+    const key = a.date.slice(0, 7);
+    if (!map.has(key)) map.set(key, { dist: 0, dur: 0, n: 0 });
+    const m = map.get(key);
+    m.dist += distKm(a); m.dur += durSec(a); m.n += 1;
+  }
+  const keys = [...map.keys()].sort();
+  return { keys, map };
+}
+function trendSeries() {
+  const pts = acts.filter((a) => a.date && a.avgPaceSecPerKm).sort((a, b) => a.date < b.date ? -1 : 1);
+  return {
+    dates: pts.map((a) => a.date),
+    pace: pts.map((a) => a.avgPaceSecPerKm),
+    hr: pts.map((a) => a.avgHeartRate),
+  };
+}
+function movingAvg(arr, win) {
+  return arr.map((_, i) => {
+    const s = Math.max(0, i - win + 1);
+    const slice = arr.slice(s, i + 1).filter((v) => v != null);
+    return slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : null;
+  });
+}
+
+function renderMonthly() {
+  const c = initChart("cMonthly");
+  const { keys, map } = monthlyAgg();
+  c.setOption({
+    ...chartTheme,
+    title: { text: "月度训练量", subtext: "里程柱 + 时长线", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis" },
+    legend: { data: ["里程 (km)", "时长 (h)"], top: 0, right: 0 },
+    grid: { left: 48, right: 48, top: 74, bottom: 40 },
+    xAxis: { type: "category", data: keys, ...AXIS },
+    yAxis: [
+      { type: "value", name: "km", ...AXIS },
+      { type: "value", name: "h", ...AXIS, splitLine: { show: false } },
+    ],
+    series: [
+      { name: "里程 (km)", type: "bar", data: keys.map((k) => round1(map.get(k).dist)), itemStyle: { color: "#38bdf8", borderRadius: [3, 3, 0, 0] } },
+      { name: "时长 (h)", type: "line", yAxisIndex: 1, data: keys.map((k) => round1(map.get(k).dur / 3600)), showSymbol: false, lineStyle: { color: "#fbbf24", width: 2 } },
+    ],
+  });
+}
+
+function renderPaceZones() {
+  const c = initChart("cPaceZones");
+  const labels = ["< 4:30", "4:30–5:00", "5:00–5:30", "5:30–6:00", "6:00–6:30", "6:30–7:00", "> 7:00"];
+  const bins = [0, 270, 300, 330, 360, 390, 420, 9999];
+  const cnt = new Array(labels.length).fill(0);
+  for (const a of acts) {
+    const p = a.avgPaceSecPerKm;
+    if (p == null) continue;
+    for (let i = 0; i < bins.length - 1; i++) { if (p >= bins[i] && p < bins[i + 1]) { cnt[i]++; break; } }
+  }
+  c.setOption({
+    ...chartTheme,
+    title: { text: "配速区间分布", subtext: "单次平均配速", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis" },
+    grid: { left: 44, right: 16, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: labels, ...AXIS },
+    yAxis: { type: "value", name: "次数", ...AXIS },
+    series: [{ name: "次数", type: "bar", data: cnt, itemStyle: { color: "#a78bfa", borderRadius: [3, 3, 0, 0] } }],
+  });
+}
+
+function renderPace() {
+  const c = initChart("cPace");
+  const { dates, pace } = trendSeries();
+  const ma = movingAvg(pace, 7);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "配速趋势", subtext: "虚线为 7 次移动平均", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => fmtPace(v) },
+    grid: { left: 56, right: 16, top: 74, bottom: 40 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: { type: "value", name: "配速", min: 0, max: 720, ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
+    series: [
+      { name: "配速", type: "line", data: pace, showSymbol: false, lineStyle: { width: 1.4, color: "#58a6ff", opacity: .5 }, itemStyle: { color: "#58a6ff" } },
+      { name: "移动平均", type: "line", data: ma, showSymbol: false, lineStyle: { width: 2.6, color: "#fbbf24", type: "dashed" } },
+    ],
+  });
+}
+
+function renderHr() {
+  const c = initChart("cHr");
+  const { dates, hr } = trendSeries();
+  const ma = movingAvg(hr.filter((v) => v != null), 7);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "心率趋势", subtext: "平均心率 bpm", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => v == null ? "—" : `${Math.round(v)} bpm` },
+    grid: { left: 48, right: 16, top: 74, bottom: 40 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: { type: "value", name: "bpm", ...AXIS },
+    series: [
+      { name: "平均心率", type: "line", data: hr, showSymbol: false, lineStyle: { width: 1.4, color: "#f87171", opacity: .45 }, itemStyle: { color: "#f87171" } },
+      { name: "移动平均", type: "line", data: ma, showSymbol: false, lineStyle: { width: 2.6, color: "#fbbf24", type: "dashed" } },
+    ],
+  });
+}
+
+function renderHrZones() {
+  const c = initChart("cHrZones");
+  const hrMax = Math.max(...acts.filter((a) => a.maxHeartRate).map((a) => a.maxHeartRate), 0) || 193;
+  const zones = [
+    { name: "Z1 恢复", min: 0.50, max: 0.60, color: "#64748b" },
+    { name: "Z2 有氧基础", min: 0.60, max: 0.70, color: "#38bdf8" },
+    { name: "Z3 有氧耐力", min: 0.70, max: 0.80, color: "#2dd4bf" },
+    { name: "Z4 乳酸阈值", min: 0.80, max: 0.90, color: "#fbbf24" },
+    { name: "Z5 无氧/最大", min: 0.90, max: 1.00, color: "#f87171" },
+  ];
+  const counts = new Array(5).fill(0);
+  let total = 0;
+  for (const file in tracks) {
+    for (const p of tracks[file].points) {
+      const hr = p[2];
+      if (hr == null || hr <= 0) continue;
+      total++;
+      const f = hr / hrMax;
+      for (let i = 0; i < 5; i++) { if (f >= zones[i].min && f < zones[i].max) { counts[i]++; break; } }
+    }
+  }
+  const totalMin = Math.round(total / 60);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "心率区间分布", subtext: `基于逐点心率 · 最大心率 ${hrMax} bpm · 累计 ${totalMin} 分钟`, left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${Math.round(v / 60)} 分钟` },
+    grid: { left: 60, right: 20, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: zones.map((z) => z.name), ...AXIS },
+    yAxis: { type: "value", name: "分钟", ...AXIS, max: (v) => Math.round(v.max * 1.2), axisLabel: { color: "#8b98ab", formatter: (v) => Math.round(v / 60) } },
+    series: [{ name: "时长", type: "bar", data: counts, itemStyle: { color: (p) => zones[p.dataIndex].color, borderRadius: [3, 3, 0, 0] }, label: { show: true, position: "top", color: "#8b98ab", formatter: (p) => `${Math.round(p.value / 60)}m` } }],
+  });
+}
+
+function renderScatter() {
+  const c = initChart("cScatter");
+  const data = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).map((a) => [a.avgPaceSecPerKm, a.avgHeartRate, a.distanceKm, a.date]);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "配速 × 心率 相关性", subtext: "气泡大小 = 距离", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm<br/>距离 ${p.value[2].toFixed(2)} km · ${p.value[3]}` },
+    grid: { left: 56, right: 24, top: 62, bottom: 48 },
+    xAxis: { type: "value", name: "配速", ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
+    yAxis: { type: "value", name: "心率", ...AXIS },
+    series: [{ name: "活动", type: "scatter", data, symbolSize: (v) => 6 + Math.min(22, v[2] * 2), itemStyle: { color: "rgba(56,189,248,.7)", borderColor: "#38bdf8" } }],
+  });
+}
+
+function renderCalendar() {
+  const c = initChart("cCalendar");
+  const data = acts.filter((a) => a.date).map((a) => [a.date, round1(distKm(a))]);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "年度活动热力图", subtext: "颜色深浅 = 当日里程", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, valueFormatter: (v) => `${v} km` },
+    visualMap: { min: 0, max: 12, calculable: true, orient: "horizontal", left: "center", bottom: 0, inRange: { color: ["#16213a", "#1f6feb", "#38bdf8", "#2dd4bf", "#fbbf24", "#ff7a45"] }, textStyle: { color: "#8b98ab" } },
+    calendar: {
+      top: 74, left: 40, right: 24, bottom: 70, range: [firstDate, lastDate], cellSize: 16,
+      splitLine: { lineStyle: { color: "#1e2a3e" } }, itemStyle: { color: "#121a2a", borderColor: "#1e2a3e", borderWidth: 1 },
+      yearLabel: { show: true, color: "#8b98ab" }, monthLabel: { color: "#8b98ab" }, dayLabel: { color: "#8b98ab", firstDay: 1 },
+    },
+    series: [{ type: "heatmap", coordinateSystem: "calendar", data }],
+  });
+}
+
+function renderWeekday() {
+  const c = initChart("cWeekday");
+  const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  const dist = new Array(7).fill(0);
+  const cnt = new Array(7).fill(0);
+  for (const a of acts) {
+    if (!a.date) continue;
+    const idx = (new Date(a.date + "T00:00:00").getDay() + 6) % 7;
+    dist[idx] += distKm(a);
+    cnt[idx] += 1;
+  }
+  c.setOption({
+    ...chartTheme,
+    title: { text: "周度训练分布", subtext: "柱 = 累计里程 · 线 = 次数（按星期几）", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v, si) => si === 0 ? `${v} km` : `${v} 次` },
+    legend: { data: ["里程 (km)", "次数"], top: 0, right: 0 },
+    grid: { left: 48, right: 48, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: days, ...AXIS },
+    yAxis: [
+      { type: "value", name: "km", ...AXIS },
+      { type: "value", name: "次", ...AXIS, splitLine: { show: false } },
+    ],
+    series: [
+      { name: "里程 (km)", type: "bar", data: dist.map(round1), itemStyle: { color: "#38bdf8", borderRadius: [4, 4, 0, 0] } },
+      { name: "次数", type: "line", yAxisIndex: 1, data: cnt, showSymbol: true, symbolSize: 7, lineStyle: { color: "#fbbf24", width: 2 }, itemStyle: { color: "#fbbf24" } },
+    ],
+  });
+}
+
+/* ================= health charts ================= */
+const LOAD_CN = { "Decreasing": "负荷下降", "Performance": "表现提升", "Maintaining": "维持", "Optimized": "优化" };
+function renderLoad() {
+  const c = initChart("cLoad");
+  const d = (health.trainingLoad || []).slice().reverse();
+  const dates = d.map((x) => x.date);
+  const short = d.map((x) => Number(x.shortLoad));
+  const long = d.map((x) => Number(x.longLoad));
+  const ratio = d.map((x) => Number(x.ratio));
+  c.setOption({
+    ...chartTheme,
+    title: { text: "训练负荷趋势", subtext: "短期 / 长期负荷 · 负荷比（右轴）", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: {
+      ...chartTheme.tooltip, trigger: "axis",
+      formatter: (params) => {
+        const ps = Array.isArray(params) ? params : [params];
+        const date = ps[0] ? ps[0].axisValue : "";
+        let html = `<b>${date}</b><br/>`;
+        for (const p of ps) {
+          if (p.seriesName === "短期负荷") html += `短期负荷 <b>${p.value}</b><br/>`;
+          else if (p.seriesName === "长期负荷") html += `长期负荷 <b>${p.value}</b><br/>`;
+          else if (p.seriesName === "负荷比") { const cm = d[p.dataIndex].comment; html += `负荷比 <b>${p.value}</b> · ${LOAD_CN[cm] || cm}<br/>`; }
+        }
+        return html;
+      },
+    },
+    legend: { data: ["短期负荷", "长期负荷", "负荷比"], top: 0, right: 0 },
+    grid: { left: 48, right: 56, top: 74, bottom: 40 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: [
+      { type: "value", name: "负荷", ...AXIS },
+      { type: "value", name: "比值", ...AXIS, splitLine: { show: false } },
+    ],
+    series: [
+      { name: "短期负荷", type: "line", data: short, showSymbol: false, lineStyle: { color: "#f87171", width: 2 }, areaStyle: { color: "rgba(248,113,113,.1)" } },
+      { name: "长期负荷", type: "line", data: long, showSymbol: false, lineStyle: { color: "#38bdf8", width: 2 } },
+      { name: "负荷比", type: "line", yAxisIndex: 1, data: ratio, showSymbol: false, lineStyle: { color: "#fbbf24", width: 1.6, type: "dashed" } },
+    ],
+  });
+}
+
+function renderHrv() {
+  const c = initChart("cHrv");
+  const d = (health.hrv || []).slice().reverse();
+  const dates = d.map((x) => x.date);
+  const avg = d.map((x) => x.avg);
+  const base = d.map((x) => x.baseline);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "睡眠 HRV 趋势", subtext: "近 7 天 · 单位 ms", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${v} ms` },
+    legend: { data: ["HRV", "基线"], top: 0, right: 0 },
+    grid: { left: 48, right: 16, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: dates, ...AXIS },
+    yAxis: { type: "value", name: "ms", ...AXIS },
+    series: [
+      { name: "HRV", type: "line", data: avg, showSymbol: true, symbolSize: 7, lineStyle: { color: "#a78bfa", width: 2.4 }, itemStyle: { color: "#a78bfa" }, areaStyle: { color: "rgba(167,139,250,.12)" } },
+      { name: "基线", type: "line", data: base, showSymbol: false, lineStyle: { color: "#8b98ab", width: 1.4, type: "dashed" } },
+    ],
+  });
+}
+
+function renderRestHR() {
+  const c = initChart("cRestHR");
+  const d = (health.restingHR || []).slice().reverse();
+  const dates = d.map((x) => x.date);
+  const v = d.map((x) => x.bpm);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "静息心率趋势", subtext: "近 30 天 · 越低越佳", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${v} bpm` },
+    grid: { left: 48, right: 16, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: { type: "value", name: "bpm", ...AXIS },
+    series: [{ name: "静息心率", type: "line", data: v, showSymbol: false, lineStyle: { color: "#2dd4bf", width: 2 }, areaStyle: { color: "rgba(45,212,191,.12)" } }],
+  });
+}
+
+function renderStress() {
+  const c = initChart("cStress");
+  const d = (health.stress || []).slice().reverse();
+  const dates = d.map((x) => x.date);
+  const v = d.map((x) => x.avg);
+  c.setOption({
+    ...chartTheme,
+    title: { text: "压力趋势", subtext: "近 30 天平均压力", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${v}` },
+    grid: { left: 48, right: 16, top: 74, bottom: 36 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: { type: "value", name: "压力", ...AXIS },
+    series: [{ name: "压力", type: "line", data: v, showSymbol: false, lineStyle: { color: "#ff7a45", width: 2 }, areaStyle: { color: "rgba(255,122,69,.1)" } }],
+  });
+}
+
+function renderSleep() {
+  const c = initChart("cSleep");
+  const d = (health.sleep || []).slice().reverse();
+  const dates = d.map((x) => x.date);
+  const score = d.map((x) => Number(x.score));
+  const deep = d.map((x) => Math.round((x.totalMinutes || 0) * (x.deepRatio || 0) / 100));
+  const light = d.map((x) => Math.round((x.totalMinutes || 0) * (x.lightRatio || 0) / 100));
+  const rem = d.map((x) => Math.round((x.totalMinutes || 0) * (x.remRatio || 0) / 100));
+  const awake = d.map((x) => Math.round((x.totalMinutes || 0) * (x.awakeRatio || 0) / 100));
+  c.setOption({
+    ...chartTheme,
+    title: { text: "睡眠结构", subtext: "近 30 天 · 柱=各阶段时长 · 线=睡眠分数", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${Math.round(v)} min` },
+    legend: { data: ["深睡", "浅睡", "REM", "清醒", "睡眠分数"], top: 0, right: 0 },
+    grid: { left: 48, right: 56, top: 74, bottom: 40 },
+    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: [
+      { type: "value", name: "分钟", ...AXIS },
+      { type: "value", name: "分数", min: 0, max: 100, ...AXIS, splitLine: { show: false } },
+    ],
+    series: [
+      { name: "深睡", type: "bar", stack: "s", data: deep, itemStyle: { color: "#2dd4bf" } },
+      { name: "浅睡", type: "bar", stack: "s", data: light, itemStyle: { color: "#38bdf8" } },
+      { name: "REM", type: "bar", stack: "s", data: rem, itemStyle: { color: "#a78bfa" } },
+      { name: "清醒", type: "bar", stack: "s", data: awake, itemStyle: { color: "#f87171" } },
+      { name: "睡眠分数", type: "line", yAxisIndex: 1, data: score, showSymbol: false, lineStyle: { color: "#fbbf24", width: 2 } },
+    ],
+  });
+}
+
+/* ================= MAP ================= */
+let map, layerGroup, selectedIndex = null, polylines = [];
+const DEFAULT_CENTER = [31.23, 121.47]; // 默认显示位置（上海）
+const DEFAULT_ZOOM = 11;
+const VIEW_KEY = "run-map-view";
+
+function loadView() {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (Array.isArray(v.center) && v.center.length === 2 && Number.isFinite(v.zoom)) return v;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+let suppressSave = false;
+function saveView() {
+  if (!map || suppressSave) return;
+  try {
+    const c = map.getCenter();
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ center: [c.lat, c.lng], zoom: map.getZoom() }));
+  } catch (e) { /* ignore */ }
+}
+
+function initMap() {
+  map = L.map("map", { preferCanvas: true, zoomControl: true, attributionControl: true });
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: "abcd", maxZoom: 19,
+  }).addTo(map);
+
+  layerGroup = L.layerGroup().addTo(map);
+  acts.forEach((a, i) => {
+    const t = tracks[a.file];
+    if (!t || !t.points || !t.points.length) return;
+    const latlngs = t.points.map((p) => [p[0], p[1]]);
+    const color = paceColor(a.avgPaceSecPerKm);
+    const poly = L.polyline(latlngs, { color, weight: 2, opacity: 0.6 });
+    poly.on("click", () => selectActivity(i, true));
+    poly.on("mouseover", () => { poly.setStyle({ weight: 4, opacity: 0.95 }); });
+    poly.on("mouseout", () => { if (selectedIndex !== i) poly.setStyle({ weight: 2, opacity: 0.6 }); });
+    poly.bindTooltip(
+      `<b>${a.date}</b><br/>${a.location || "—"} · ${distKm(a).toFixed(2)} km<br/>配速 ${fmtPace(a.avgPaceSecPerKm)} · 心率 ${a.avgHeartRate ?? "—"} bpm`,
+      { sticky: true, className: "run-tip", direction: "top" }
+    );
+    polylines.push({ poly, baseColor: color, index: i });
+    layerGroup.addLayer(poly);
+  });
+  // 恢复上次视图；首次打开则用默认位置（上海）
+  const saved = loadView();
+  if (saved) map.setView(saved.center, saved.zoom);
+  else map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+  map.on("moveend", saveView);
+  $("#mapCount").textContent = `共 ${polylines.length} 条轨迹`;
+}
+
+function highlightMap(index) {
+  polylines.forEach(({ poly, baseColor, index: i }) => {
+    if (i === index) { poly.setStyle({ color: "#ffd166", weight: 5, opacity: 1 }); poly.bringToFront(); }
+    else { poly.setStyle({ color: baseColor, weight: 2, opacity: 0.35 }); }
+  });
+}
+function focusMap(index) {
+  const t = tracks[acts[index].file];
+  if (!t || !t.points || !t.points.length) return;
+  suppressSave = true;
+  map.fitBounds(L.latLngBounds(t.points.map((p) => [p[0], p[1]])), { padding: [60, 60], maxZoom: 15 });
+  setTimeout(() => { suppressSave = false; }, 400);
+}
+
+/* ================= DETAIL ================= */
+let detailChart = null;
+function haversine(p1, p2) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (p2[0] - p1[0]) * toR, dLon = (p2[1] - p1[1]) * toR;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(p1[0] * toR) * Math.cos(p2[0] * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function renderDetail(index) {
+  const a = acts[index];
+  $("#detailMeta").innerHTML = `
+    <span>日期 <b>${a.date}</b></span>
+    <span>距离 <b>${distKm(a).toFixed(2)} km</b></span>
+    <span>时长 <b>${fmtDur(a.durationSeconds)}</b></span>
+    <span>配速 <b>${fmtPace(a.avgPaceSecPerKm)} /km</b></span>
+    <span>平均心率 <b>${a.avgHeartRate ?? "—"} bpm</b></span>
+    <span>卡路里 <b>${a.calories ?? "—"}</b></span>
+    ${a.location ? `<span>地点 <b>${a.location}</b></span>` : ""}
+  `;
+
+  const t = tracks[a.file];
+  if (!detailChart) detailChart = echarts.init(document.getElementById("detailChart"));
+  if (!t || !t.points || t.points.length < 2) {
+    detailChart.setOption({ ...chartTheme, title: { text: "该活动无轨迹数据", left: "center", top: "middle", textStyle: { color: "#8b98ab", fontSize: 14 } } }, true);
+    return;
+  }
+  const pts = t.points;
+  const secs = pts.map((p) => p[3]);
+  const hr = pts.map((p) => p[2]);
+  const pace = [null];
+  for (let i = 1; i < pts.length; i++) {
+    const dt = pts[i][3] - pts[i - 1][3];
+    const dm = haversine(pts[i - 1], pts[i]);
+    pace[i] = dt > 0 && dm > 0 ? dt / (dm / 1000) : null;
+  }
+  const hasHr = hr.some((v) => v != null);
+  const x = secs.map((s) => Math.round(s / 60 * 10) / 10);
+  detailChart.setOption({
+    ...chartTheme,
+    title: { text: "沿时间 · 配速 / 心率", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 } },
+    tooltip: {
+      ...chartTheme.tooltip, trigger: "axis",
+      formatter: (params) => {
+        const ps = Array.isArray(params) ? params : [params];
+        const x = ps[0] ? ps[0].axisValue : "";
+        let html = `${x} 分钟<br/>`;
+        for (const p of ps) {
+          if (p.seriesName === "配速") html += `<span style="color:#58a6ff">●</span> 配速 <b>${p.value == null ? "—" : fmtPace(p.value)}</b>/km<br/>`;
+          else if (p.seriesName === "心率") html += `<span style="color:#f87171">●</span> 心率 <b>${p.value == null ? "—" : Math.round(p.value)}</b> bpm<br/>`;
+        }
+        return html;
+      },
+    },
+    legend: { data: hasHr ? ["配速", "心率"] : ["配速"], top: 0, right: 0 },
+    grid: { left: 56, right: hasHr ? 56 : 24, top: 68, bottom: 40 },
+    xAxis: { type: "category", name: "分钟", data: x, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
+    yAxis: [
+      { type: "value", name: "配速", min: 0, max: 720, ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
+      ...(hasHr ? [{ type: "value", name: "心率", ...AXIS, axisLabel: { color: "#8b98ab" } }] : []),
+    ],
+    series: [
+      { name: "配速", type: "line", data: pace, yAxisIndex: 0, showSymbol: false, lineStyle: { width: 2, color: "#58a6ff" }, areaStyle: { color: "rgba(88,166,255,.08)" } },
+      ...(hasHr ? [{ name: "心率", type: "line", data: hr, yAxisIndex: 1, showSymbol: false, lineStyle: { width: 2, color: "#f87171" }, areaStyle: { color: "rgba(248,113,113,.08)" } }] : []),
+    ],
+  }, true);
+}
+
+/* ================= GALLERY ================= */
+function drawTrackThumb(canvas, points, color) {
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0b1220";
+  ctx.fillRect(0, 0, W, H);
+  if (!points || points.length < 2) {
+    ctx.fillStyle = "#3a4a63"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("无轨迹", W / 2, H / 2 + 4);
+    return;
+  }
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  for (const p of points) {
+    if (p[0] < minLat) minLat = p[0];
+    if (p[0] > maxLat) maxLat = p[0];
+    if (p[1] < minLon) minLon = p[1];
+    if (p[1] > maxLon) maxLon = p[1];
+  }
+  const pad = 10;
+  const latSpan = (maxLat - minLat) || 1e-6;
+  const lonSpan = (maxLon - minLon) || 1e-6;
+  const scale = Math.min((W - 2 * pad) / lonSpan, (H - 2 * pad) / latSpan);
+  const cx = (minLon + maxLon) / 2, cy = (minLat + maxLat) / 2;
+  const px = (lon) => W / 2 + (lon - cx) * scale;
+  const py = (lat) => H / 2 - (lat - cy) * scale;
+  ctx.beginPath();
+  points.forEach((p, i) => { const x = px(p[1]), y = py(p[0]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.shadowColor = color; ctx.shadowBlur = 3;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const s = points[0], e = points[points.length - 1];
+  ctx.fillStyle = "#4ade80"; ctx.beginPath(); ctx.arc(px(s[1]), py(s[0]), 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#f87171"; ctx.beginPath(); ctx.arc(px(e[1]), py(e[0]), 2.6, 0, Math.PI * 2); ctx.fill();
+}
+
+let galleryOrder = "date";
+function shuffledIndices(n) {
+  const arr = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function renderGallery() {
+  const order = galleryOrder === "random" ? shuffledIndices(acts.length) : acts.map((_, i) => i);
+  const grid = $("#galleryGrid");
+  grid.innerHTML = order.map((i) => {
+    const a = acts[i];
+    return `
+    <div class="g-card">
+      <canvas class="g-thumb" width="180" height="120"></canvas>
+      <div class="g-body">
+        <div class="g-date">${a.date}</div>
+        <div class="g-dist">${distKm(a).toFixed(1)}<span>km</span></div>
+        <div class="g-loc">${a.location || ""}</div>
+      </div>
+    </div>`;
+  }).join("");
+  grid.querySelectorAll(".g-card").forEach((card, idx) => {
+    const i = order[idx];
+    const t = tracks[acts[i].file];
+    drawTrackThumb(card.querySelector(".g-thumb"), t && t.points, paceColor(acts[i].avgPaceSecPerKm));
+  });
+}
+
+/* ================= TABLE ================= */
+let sortKey = "date", sortDir = -1;
+function renderTable() {
+  const q = $("#searchBox").value.trim().toLowerCase();
+  let rows = acts.map((a, i) => ({ a, i })).filter(({ a }) => {
+    if (!q) return true;
+    const hay = `${a.date} ${a.location || ""} ${distKm(a).toFixed(1)} ${fmtPace(a.avgPaceSecPerKm)}`.toLowerCase();
+    return hay.includes(q);
+  });
+  rows.sort((x, y) => {
+    const va = x.a[sortKey], vb = y.a[sortKey];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1; if (vb == null) return -1;
+    const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
+    return cmp * sortDir;
+  });
+  const tbody = $("#tableBody");
+  tbody.innerHTML = rows.map(({ a, i }) => `
+    <tr data-i="${i}" class="${i === selectedIndex ? "active" : ""}">
+      <td class="num">${a.date}</td>
+      <td class="num">${distKm(a).toFixed(2)} km</td>
+      <td class="num">${fmtDur(a.durationSeconds)}</td>
+      <td class="num">${fmtPace(a.avgPaceSecPerKm)}</td>
+      <td class="num">${a.avgHeartRate ?? "—"}</td>
+      <td class="num">${a.calories ?? "—"}</td>
+      <td>${a.location || "—"}</td>
+    </tr>`).join("");
+  $("#rowCount").textContent = `显示 ${rows.length} / ${acts.length} 条`;
+  tbody.querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", () => selectActivity(Number(tr.dataset.i), true)));
+}
+
+function selectActivity(index, focus) {
+  selectedIndex = index;
+  if (focus) focusMap(index);
+  highlightMap(index);
+  renderDetail(index);
+  renderTable();
+  document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ================= init ================= */
+function safe(label, fn) { try { fn(); } catch (e) { console.error("[" + label + "] 渲染失败:", e); } }
+function init() {
+  safe("kpis", renderKpis);
+  safe("fitness", renderFitness);
+  safe("stats", renderStats);
+  safe("map", initMap);
+  safe("monthly", renderMonthly);
+  safe("paceZones", renderPaceZones);
+  safe("pace", renderPace);
+  safe("hr", renderHr);
+  safe("hrZones", renderHrZones);
+  safe("scatter", renderScatter);
+  safe("weekday", renderWeekday);
+  safe("calendar", renderCalendar);
+  safe("load", renderLoad);
+  safe("hrv", renderHrv);
+  safe("restHR", renderRestHR);
+  safe("stress", renderStress);
+  safe("sleep", renderSleep);
+  safe("gallery", renderGallery);
+  safe("table", renderTable);
+
+  document.querySelectorAll("thead th").forEach((th) => {
+    th.addEventListener("click", () => {
+      const k = th.dataset.key;
+      if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = -1; }
+      renderTable();
+    });
+  });
+  $("#searchBox").addEventListener("input", renderTable);
+  document.querySelectorAll(".gallery-sort .sort-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      galleryOrder = btn.dataset.sort;
+      document.querySelectorAll(".gallery-sort .sort-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      renderGallery();
+    });
+  });
+
+  if (acts.length) {
+    selectedIndex = acts.length - 1;
+    safe("detail", () => renderDetail(selectedIndex));
+    safe("map-highlight", () => highlightMap(selectedIndex));
+    renderTable();
+  }
+}
+init();
+
+/* ================= 入场动画 ================= */
+(function () {
+  const secs = document.querySelectorAll("section");
+  if (!("IntersectionObserver" in window)) {
+    secs.forEach((el) => el.classList.add("visible"));
+    return;
+  }
+  secs.forEach((el) => el.classList.add("reveal"));
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) { en.target.classList.add("visible"); io.unobserve(en.target); }
+    });
+  }, { threshold: 0.08 });
+  secs.forEach((el) => io.observe(el));
+})();
+</script>
+</body>
+</html>

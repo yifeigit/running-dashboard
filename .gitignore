@@ -1,0 +1,25 @@
+# 分享包与临时产物
+share/
+*.zip
+make_share.ps1
+
+# 中间数据产物（sync_coros.mjs 会重新生成）
+activities.json
+activities.csv
+summary.json
+tools/*.json
+tools/health.json
+tools/health_raw.json
+tools/tracks.json
+tools/fit_parsed.json
+tools/tcx_parsed.json
+tools/coros_records*.json
+tools/compare_*.json
+
+# 临时脚本
+tools/_*.mjs
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log

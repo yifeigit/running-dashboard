@@ -1,0 +1,59 @@
+name: Daily Sync
+
+on:
+  schedule:
+    # 每天 UTC 00:00 = 北京时间 08:00
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install fitdecode
+        run: pip install fitdecode
+
+      - name: Restore COROS token
+        env:
+          COROS_TOKEN: ${{ secrets.COROS_TOKEN }}
+        run: |
+          mkdir -p ~/.coros-mcp-skill-gateway-ts/cn
+          printf '%s' "$COROS_TOKEN" > ~/.coros-mcp-skill-gateway-ts/cn/token.json
+
+      - name: Sync COROS data
+        run: node sync_coros.mjs
+
+      - name: Update COROS token secret (if GH_TOKEN present)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        if: ${{ env.GH_TOKEN != '' }}
+        run: |
+          gh secret set COROS_TOKEN --repo yifeigit/running-dashboard < ~/.coros-mcp-skill-gateway-ts/cn/token.json
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: auto sync $(date -u +%Y-%m-%d)"
+            git push
+          fi
