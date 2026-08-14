@@ -172,6 +172,34 @@
   .chart.tall { height: 360px; }
   .full { grid-column: 1 / -1; }
 
+  /* ---------- 配速×心率 + 计算模块 ---------- */
+  .scatter-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: stretch; }
+  .scatter-layout .chart.tall { height: 360px; }
+  .pace-calc {
+    display: flex; flex-direction: column; justify-content: center; gap: 14px;
+    padding: 22px 20px; background: var(--card2); border: 1px solid var(--border);
+    border-radius: 12px; min-width: 0;
+  }
+  .calc-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .calc-formula { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .calc-formula b { color: var(--gold); }
+  .calc-meta { font-size: 12px; color: var(--muted); }
+  .calc-row { display: flex; gap: 10px; }
+  .calc-row input {
+    flex: 1; min-width: 0; background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 8px; font-size: 14px; outline: none; font-variant-numeric: tabular-nums;
+  }
+  .calc-row input:focus { border-color: var(--accent); }
+  .calc-row button {
+    background: var(--accent); color: #04121f; border: none; border-radius: 8px; padding: 0 16px;
+    font-size: 13.5px; font-weight: 700; cursor: pointer; transition: filter .15s; white-space: nowrap;
+  }
+  .calc-row button:hover { filter: brightness(1.12); }
+  .calc-result { font-size: 13px; color: var(--muted); }
+  .calc-result b { font-size: 30px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; margin: 0 6px 0 2px; }
+  .calc-result span { color: var(--muted); }
+  .calc-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
   #detailChart { height: 360px; width: 100%; }
   .detail-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
   .detail-meta b { color: var(--text); font-weight: 600; }
@@ -223,6 +251,7 @@
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
     .grid { grid-template-columns: 1fr; }
+    .scatter-layout { grid-template-columns: 1fr; }
     .fitness-grid { grid-template-columns: 1fr; }
     #map { height: 420px; }
   }
@@ -299,7 +328,22 @@
       <div class="card"><div class="chart" id="cPaceZones"></div></div>
       <div class="card"><div class="chart" id="cPace"></div></div>
       <div class="card"><div class="chart" id="cHr"></div></div>
-      <div class="card full"><div class="chart tall" id="cScatter"></div></div>
+      <div class="card full">
+        <div class="scatter-layout">
+          <div class="chart tall" id="cScatter"></div>
+          <div class="pace-calc">
+            <div class="calc-title">配速 → 心率 预测</div>
+            <div class="calc-formula" id="calcFormula">—</div>
+            <div class="calc-meta" id="calcMeta">y = 心率(bpm) · x = 配速(秒/km)</div>
+            <div class="calc-row">
+              <input id="calcPace" type="text" inputmode="numeric" placeholder="配速，如 5:30" autocomplete="off">
+              <button id="calcBtn" type="button">计算</button>
+            </div>
+            <div class="calc-result">预测心率<b id="calcResult">—</b><span>bpm</span></div>
+            <div class="calc-hint" id="calcHint">基于最近 30 次跑步的线性拟合</div>
+          </div>
+        </div>
+      </div>
       <div class="card full"><div class="chart tall" id="cCalendar"></div></div>
     </div>
   </section>
@@ -622,11 +666,15 @@ function renderHr() {
   });
 }
 
+let paceHrFit = null;
+
 function renderScatter() {
   const c = initChart("cScatter");
-  const pts = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).map((a) => ({ x: a.avgPaceSecPerKm, y: a.avgHeartRate, d: a.distanceKm, date: a.date }));
+  // 仅取最近 30 次（有配速 + 心率的跑步）
+  const recent = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).slice(-30);
+  const pts = recent.map((a) => ({ x: a.avgPaceSecPerKm, y: a.avgHeartRate, d: a.distanceKm, date: a.date }));
   const data = pts.map((p) => [p.x, p.y, p.d, p.date]);
-  // 线性回归：心率 = slope × 配速(秒/km) + intercept
+  // 线性回归：心率(y) = slope × 配速(x, 秒/km) + intercept
   let fit = null;
   if (pts.length >= 2) {
     const n = pts.length;
@@ -646,13 +694,11 @@ function renderScatter() {
       fit = { slope, intercept, r2, xMin: Math.min(...xs), xMax: Math.max(...xs) };
     }
   }
-  let subtext = "气泡大小 = 距离";
+  paceHrFit = fit;
+  const subtext = `最近 ${pts.length} 次跑步 · 气泡大小 = 距离 · 虚线为线性拟合`;
   const series = [{ name: "活动", type: "scatter", data, symbolSize: (v) => 6 + Math.min(22, v[2] * 2), itemStyle: { color: "rgba(56,189,248,.7)", borderColor: "#38bdf8" }, z: 5 }];
   const legendData = ["活动"];
   if (fit) {
-    const b = fit.intercept;
-    const sign = b >= 0 ? "+" : "−";
-    subtext = `气泡大小 = 距离 · 拟合 HR = ${fit.slope.toFixed(3)}×配速(秒/km) ${sign} ${Math.abs(b).toFixed(1)} · R² = ${fit.r2.toFixed(3)}`;
     legendData.push("线性拟合");
     series.push({
       name: "线性拟合", type: "line", silent: true,
@@ -670,6 +716,53 @@ function renderScatter() {
     yAxis: { type: "value", name: "心率", ...AXIS },
     series,
   });
+  renderPaceCalc(fit);
+  const calcInput = $("#calcPace"), calcBtn = $("#calcBtn");
+  if (calcInput && calcBtn) {
+    calcInput.addEventListener("input", computePaceHr);
+    calcInput.addEventListener("keydown", (e) => { if (e.key === "Enter") computePaceHr(); });
+    calcBtn.addEventListener("click", computePaceHr);
+  }
+}
+
+function renderPaceCalc(fit) {
+  const fEl = $("#calcFormula"), mEl = $("#calcMeta");
+  if (!fEl) return;
+  if (!fit) { fEl.textContent = "暂无可拟合数据"; if (mEl) mEl.textContent = ""; return; }
+  const b = fit.intercept;
+  const sign = b >= 0 ? "+" : "−";
+  fEl.innerHTML = `y = <b>${fit.slope.toFixed(3)}</b>·x ${sign} <b>${Math.abs(b).toFixed(1)}</b>`;
+  if (mEl) mEl.textContent = `y = 心率(bpm) · x = 配速(秒/km) · R² = ${fit.r2.toFixed(3)}`;
+}
+
+function parsePaceInput(s) {
+  s = String(s).trim();
+  if (!s) return null;
+  const hms = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/.exec(s);
+  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+  const ms = /^(\d{1,2}):([0-5]?\d)$/.exec(s);
+  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
+  const num = /^\d+(\.\d+)?$/.exec(s);
+  if (num) return Number(num[1]);
+  return null;
+}
+
+function computePaceHr() {
+  const out = $("#calcResult"), hint = $("#calcHint");
+  if (!paceHrFit) {
+    if (out) out.textContent = "—";
+    if (hint) hint.textContent = "暂无可用的拟合公式";
+    return;
+  }
+  const sec = parsePaceInput($("#calcPace").value);
+  if (sec == null || sec <= 0) {
+    if (out) out.textContent = "—";
+    if (hint) hint.textContent = "请输入配速，如 5:30（或秒数 330）";
+    return;
+  }
+  const hr = paceHrFit.slope * sec + paceHrFit.intercept;
+  if (out) out.textContent = Math.round(hr);
+  if (hint) hint.textContent = `${fmtPace(sec)} /km → 约 ${Math.round(hr)} bpm（R² = ${paceHrFit.r2.toFixed(3)}，仅供参考）`;
 }
 
 function renderCalendar() {
