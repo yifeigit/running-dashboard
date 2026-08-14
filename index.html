@@ -670,34 +670,54 @@ let paceHrFit = null;
 
 function renderScatter() {
   const c = initChart("cScatter");
-  // 仅取最近 30 次（有配速 + 心率的跑步）
+  // 最近 30 次跑步，逐点计算：滚动 60 秒平滑配速 × 该点心率（而非单次平均配速）
   const recent = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).slice(-30);
-  const pts = recent.map((a) => ({ x: a.avgPaceSecPerKm, y: a.avgHeartRate, d: a.distanceKm, date: a.date }));
-  const data = pts.map((p) => [p.x, p.y, p.d, p.date]);
+  const samples = [];
+  for (const a of recent) {
+    const t = tracks[a.file];
+    if (!t || !t.points || t.points.length < 2) continue;
+    const pts = t.points;
+    for (let i = 1; i < pts.length; i++) {
+      const tNow = pts[i][3];
+      let j = i - 1;
+      while (j > 0 && tNow - pts[j][3] < 60) j--;
+      const dt = tNow - pts[j][3];
+      if (dt <= 0) continue;
+      let dm = 0;
+      for (let k = j; k < i; k++) dm += haversine(pts[k], pts[k + 1]);
+      if (dm <= 0) continue;
+      const pace = dt / (dm / 1000); // 秒/公里
+      if (pace < 180 || pace > 900) continue;   // 过滤停表/异常段
+      const hr = pts[i][2];
+      if (hr == null || hr < 80 || hr > 220) continue;
+      samples.push([pace, hr]);
+    }
+  }
+  const data = samples;
   // 线性回归：心率(y) = slope × 配速(x, 秒/km) + intercept
   let fit = null;
-  if (pts.length >= 2) {
-    const n = pts.length;
-    const sx = pts.reduce((s, p) => s + p.x, 0);
-    const sy = pts.reduce((s, p) => s + p.y, 0);
-    const sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
-    const sxx = pts.reduce((s, p) => s + p.x * p.x, 0);
+  if (samples.length >= 2) {
+    const n = samples.length;
+    const sx = samples.reduce((s, p) => s + p[0], 0);
+    const sy = samples.reduce((s, p) => s + p[1], 0);
+    const sxy = samples.reduce((s, p) => s + p[0] * p[1], 0);
+    const sxx = samples.reduce((s, p) => s + p[0] * p[0], 0);
     const denom = n * sxx - sx * sx;
     if (denom !== 0) {
       const slope = (n * sxy - sx * sy) / denom;
       const intercept = (sy - slope * sx) / n;
       const yMean = sy / n;
-      const ssRes = pts.reduce((s, p) => { const e = p.y - (slope * p.x + intercept); return s + e * e; }, 0);
-      const ssTot = pts.reduce((s, p) => { const e = p.y - yMean; return s + e * e; }, 0);
+      const ssRes = samples.reduce((s, p) => { const e = p[1] - (slope * p[0] + intercept); return s + e * e; }, 0);
+      const ssTot = samples.reduce((s, p) => { const e = p[1] - yMean; return s + e * e; }, 0);
       const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-      const xs = pts.map((p) => p.x);
+      const xs = samples.map((p) => p[0]);
       fit = { slope, intercept, r2, xMin: Math.min(...xs), xMax: Math.max(...xs) };
     }
   }
   paceHrFit = fit;
-  const subtext = `最近 ${pts.length} 次跑步 · 气泡大小 = 距离 · 虚线为线性拟合`;
-  const series = [{ name: "活动", type: "scatter", data, symbolSize: (v) => 6 + Math.min(22, v[2] * 2), itemStyle: { color: "rgba(56,189,248,.7)", borderColor: "#38bdf8" }, z: 5 }];
-  const legendData = ["活动"];
+  const subtext = `最近 30 次跑步 · 逐点 60 秒平滑配速 × 心率 · ${samples.length} 个样本`;
+  const series = [{ name: "样本点", type: "scatter", data, symbolSize: 5, itemStyle: { color: "rgba(56,189,248,.35)", borderColor: "rgba(56,189,248,.55)", borderWidth: 0.5 }, z: 5 }];
+  const legendData = ["样本点"];
   if (fit) {
     legendData.push("线性拟合");
     series.push({
@@ -709,7 +729,7 @@ function renderScatter() {
   c.setOption({
     ...chartTheme,
     title: { text: "配速 × 心率 相关性", subtext, left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm<br/>距离 ${p.value[2].toFixed(2)} km · ${p.value[3]}` },
+    tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm` },
     legend: { data: legendData, top: 0, right: 0 },
     grid: { left: 56, right: 24, top: 62, bottom: 48 },
     xAxis: { type: "value", name: "配速", scale: true, ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
