@@ -305,11 +305,10 @@
 
   <!-- HEALTH CHARTS -->
   <section id="health">
-    <div class="sec-title"><h2>健康与恢复</h2><span class="hint">训练负荷 · HRV · 静息心率 · 睡眠 · 压力</span></div>
+    <div class="sec-title"><h2>健康与恢复</h2><span class="hint">训练负荷 · HRV · 压力 · 睡眠</span></div>
     <div class="grid">
       <div class="card full"><div class="chart tall" id="cLoad"></div></div>
       <div class="card"><div class="chart" id="cHrv"></div></div>
-      <div class="card"><div class="chart" id="cRestHR"></div></div>
       <div class="card"><div class="chart" id="cStress"></div></div>
       <div class="card full"><div class="chart tall" id="cSleep"></div></div>
     </div>
@@ -700,22 +699,6 @@ function renderHrv() {
   });
 }
 
-function renderRestHR() {
-  const c = initChart("cRestHR");
-  const d = (health.restingHR || []).slice().reverse();
-  const dates = d.map((x) => x.date);
-  const v = d.map((x) => x.bpm);
-  c.setOption({
-    ...chartTheme,
-    title: { text: "静息心率趋势", subtext: "近 30 天 · 越低越佳", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${v} bpm` },
-    grid: { left: 48, right: 16, top: 74, bottom: 36 },
-    xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
-    yAxis: { type: "value", name: "bpm", ...AXIS },
-    series: [{ name: "静息心率", type: "line", data: v, showSymbol: false, lineStyle: { color: "#2dd4bf", width: 2 }, areaStyle: { color: "rgba(45,212,191,.12)" } }],
-  });
-}
-
 function renderStress() {
   const c = initChart("cStress");
   const d = (health.stress || []).slice().reverse();
@@ -1039,7 +1022,6 @@ function init() {
   safe("calendar", renderCalendar);
   safe("load", renderLoad);
   safe("hrv", renderHrv);
-  safe("restHR", renderRestHR);
   safe("stress", renderStress);
   safe("sleep", renderSleep);
   safe("gallery", renderGallery);
