@@ -254,7 +254,7 @@
 
   <!-- FITNESS -->
   <section id="fitness">
-    <div class="sec-title"><h2>⚡ 体能评估</h2><span class="hint">来自 COROS 训练平台</span></div>
+    <div class="sec-title"><h2>体能评估</h2><span class="hint">来自 COROS 训练平台</span></div>
     <div class="fitness-grid">
       <div class="f-card">
         <div class="f-label">最大摄氧量 VO₂max</div>
@@ -276,13 +276,13 @@
 
   <!-- 训练统计 -->
   <section id="stats">
-    <div class="sec-title"><h2>📈 训练统计</h2><span class="hint">累计技术指标</span></div>
+    <div class="sec-title"><h2>训练统计</h2><span class="hint">累计技术指标</span></div>
     <div class="stats-bar" id="statsBar"></div>
   </section>
 
   <!-- MAP -->
   <section id="map">
-    <div class="sec-title"><h2>🗺️ 跑步轨迹地图</h2><span class="hint">颜色 = 配速（红快 → 蓝慢）</span></div>
+    <div class="sec-title"><h2>跑步轨迹地图</h2><span class="hint">颜色 = 配速（红快 → 蓝慢）</span></div>
     <div id="map"></div>
     <div class="map-legend">
       <span class="lg"><span class="pace-bar"></span> 快 <span style="color:var(--muted)">←——→</span> 慢</span>
@@ -293,7 +293,7 @@
 
   <!-- TRAINING CHARTS -->
   <section id="charts">
-    <div class="sec-title"><h2>📊 训练分析</h2><span class="hint">里程、配速、心率与强度分布</span></div>
+    <div class="sec-title"><h2>训练分析</h2><span class="hint">里程、配速、心率与强度分布</span></div>
     <div class="grid">
       <div class="card"><div class="chart" id="cMonthly"></div></div>
       <div class="card"><div class="chart" id="cPaceZones"></div></div>
@@ -306,7 +306,7 @@
 
   <!-- HEALTH CHARTS -->
   <section id="health">
-    <div class="sec-title"><h2>🏥 健康与恢复</h2><span class="hint">训练负荷 · HRV · 静息心率 · 睡眠 · 压力</span></div>
+    <div class="sec-title"><h2>健康与恢复</h2><span class="hint">训练负荷 · HRV · 静息心率 · 睡眠 · 压力</span></div>
     <div class="grid">
       <div class="card full"><div class="chart tall" id="cLoad"></div></div>
       <div class="card"><div class="chart" id="cHrv"></div></div>
@@ -318,7 +318,7 @@
 
   <!-- DETAIL -->
   <section id="detail">
-    <div class="sec-title"><h2>🔍 单次活动详情</h2><span class="hint">配速与心率沿时间变化</span></div>
+    <div class="sec-title"><h2>单次活动详情</h2><span class="hint">配速与心率沿时间变化</span></div>
     <div class="card">
       <div class="detail-meta" id="detailMeta"></div>
       <div id="detailChart"></div>
@@ -327,7 +327,7 @@
 
   <!-- LIST -->
   <section id="list">
-    <div class="sec-title"><h2>📋 活动列表</h2><span class="hint">点击行联动地图与详情 · 点击表头排序</span></div>
+    <div class="sec-title"><h2>活动列表</h2><span class="hint">点击行联动地图与详情 · 点击表头排序</span></div>
     <div class="card">
       <div class="table-tools">
         <input id="searchBox" type="text" placeholder="搜索日期 / 地点 / 距离…">
@@ -355,11 +355,11 @@
   <!-- GALLERY (纯展示，无交互) -->
   <section id="gallery">
     <div class="sec-title">
-      <h2>🃏 轨迹图集</h2>
+      <h2>轨迹图集</h2>
       <span class="hint">全部轨迹缩略图拼接 · 颜色 = 配速（红快 → 蓝慢）</span>
       <div class="gallery-sort">
         <button class="sort-btn active" data-sort="date">按日期</button>
-        <button class="sort-btn" data-sort="random">🎲 随机</button>
+        <button class="sort-btn" data-sort="random">随机</button>
       </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"></div>
@@ -807,7 +807,7 @@ function renderSleep() {
           html += `<span style="color:${p.color}">●</span> ${p.seriesName} <b>${Math.round(p.value)}</b> min<br/>`;
         }
         const scoreP = ps.find((p) => p.seriesName === "睡眠分数");
-        if (scoreP != null && Number.isFinite(scoreP.value)) html += `<span style="color:#fbbf24">★</span> 睡眠分数 <b>${scoreP.value}</b><br/>`;
+        if (scoreP != null && Number.isFinite(scoreP.value)) html += `<span style="color:#fbbf24">●</span> 睡眠分数 <b>${scoreP.value}</b><br/>`;
         if (rec.totalMinutes != null) html += `总时长 <b>${rec.totalMinutes}</b> min`;
         return html;
       },
