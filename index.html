@@ -712,8 +712,8 @@ function renderScatter() {
     tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm<br/>距离 ${p.value[2].toFixed(2)} km · ${p.value[3]}` },
     legend: { data: legendData, top: 0, right: 0 },
     grid: { left: 56, right: 24, top: 62, bottom: 48 },
-    xAxis: { type: "value", name: "配速", ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
-    yAxis: { type: "value", name: "心率", ...AXIS },
+    xAxis: { type: "value", name: "配速", scale: true, ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
+    yAxis: { type: "value", name: "心率", scale: true, ...AXIS },
     series,
   });
   renderPaceCalc(fit);
