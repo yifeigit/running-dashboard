@@ -177,14 +177,9 @@
   .detail-meta b { color: var(--text); font-weight: 600; }
 
   /* ---------- gallery (纯展示) ---------- */
-  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
-  .g-card { background: linear-gradient(160deg, var(--card), var(--card2)); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px; }
+  .g-card { overflow: hidden; }
   .g-thumb { width: 100%; aspect-ratio: 3 / 2; display: block; background: #0b1220; }
-  .g-body { padding: 6px 8px 7px; }
-  .g-date { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .g-dist { font-size: 14px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
-  .g-dist span { font-size: 10px; color: var(--muted); font-weight: 500; margin-left: 2px; }
-  .g-loc { font-size: 10px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gallery-sort { margin-left: auto; display: flex; gap: 6px; }
   .sort-btn {
     background: var(--card2); border: 1px solid var(--border); color: var(--muted);
@@ -354,7 +349,6 @@
   <section id="gallery">
     <div class="sec-title">
       <h2>轨迹图集</h2>
-      <span class="hint">全部轨迹缩略图拼接 · 颜色 = 配速（红快 → 蓝慢）</span>
       <div class="gallery-sort">
         <button class="sort-btn active" data-sort="date">按日期</button>
         <button class="sort-btn" data-sort="random">随机</button>
@@ -899,17 +893,13 @@ function renderDetail(index) {
 }
 
 /* ================= GALLERY ================= */
-function drawTrackThumb(canvas, points, color) {
+function drawTrackThumb(canvas, points) {
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = "#0b1220";
   ctx.fillRect(0, 0, W, H);
-  if (!points || points.length < 2) {
-    ctx.fillStyle = "#3a4a63"; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("无轨迹", W / 2, H / 2 + 4);
-    return;
-  }
+  if (!points || points.length < 2) return;
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (const p of points) {
     if (p[0] < minLat) minLat = p[0];
@@ -917,7 +907,7 @@ function drawTrackThumb(canvas, points, color) {
     if (p[1] < minLon) minLon = p[1];
     if (p[1] > maxLon) maxLon = p[1];
   }
-  const pad = 10;
+  const pad = 8;
   const latSpan = (maxLat - minLat) || 1e-6;
   const lonSpan = (maxLon - minLon) || 1e-6;
   const scale = Math.min((W - 2 * pad) / lonSpan, (H - 2 * pad) / latSpan);
@@ -926,15 +916,12 @@ function drawTrackThumb(canvas, points, color) {
   const py = (lat) => H / 2 - (lat - cy) * scale;
   ctx.beginPath();
   points.forEach((p, i) => { const x = px(p[1]), y = py(p[0]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = "rgba(232,240,250,.92)";
+  ctx.lineWidth = 1.4;
   ctx.lineJoin = "round"; ctx.lineCap = "round";
-  ctx.shadowColor = color; ctx.shadowBlur = 3;
+  ctx.shadowColor = "rgba(232,240,250,.5)"; ctx.shadowBlur = 2;
   ctx.stroke();
   ctx.shadowBlur = 0;
-  const s = points[0], e = points[points.length - 1];
-  ctx.fillStyle = "#4ade80"; ctx.beginPath(); ctx.arc(px(s[1]), py(s[0]), 2.6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#f87171"; ctx.beginPath(); ctx.arc(px(e[1]), py(e[0]), 2.6, 0, Math.PI * 2); ctx.fill();
 }
 
 let galleryOrder = "date";
@@ -949,22 +936,14 @@ function shuffledIndices(n) {
 function renderGallery() {
   const order = galleryOrder === "random" ? shuffledIndices(acts.length) : acts.map((_, i) => i);
   const grid = $("#galleryGrid");
-  grid.innerHTML = order.map((i) => {
-    const a = acts[i];
-    return `
+  grid.innerHTML = order.map(() => `
     <div class="g-card">
-      <canvas class="g-thumb" width="180" height="120"></canvas>
-      <div class="g-body">
-        <div class="g-date">${a.date}</div>
-        <div class="g-dist">${distKm(a).toFixed(1)}<span>km</span></div>
-        <div class="g-loc">${a.location || ""}</div>
-      </div>
-    </div>`;
-  }).join("");
+      <canvas class="g-thumb" width="240" height="160"></canvas>
+    </div>`).join("");
   grid.querySelectorAll(".g-card").forEach((card, idx) => {
     const i = order[idx];
     const t = tracks[acts[i].file];
-    drawTrackThumb(card.querySelector(".g-thumb"), t && t.points, paceColor(acts[i].avgPaceSecPerKm));
+    drawTrackThumb(card.querySelector(".g-thumb"), t && t.points);
   });
 }
 
