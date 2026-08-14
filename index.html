@@ -172,34 +172,6 @@
   .chart.tall { height: 360px; }
   .full { grid-column: 1 / -1; }
 
-  /* ---------- 配速×心率 + 计算模块 ---------- */
-  .scatter-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: stretch; }
-  .scatter-layout .chart.tall { height: 360px; }
-  .pace-calc {
-    display: flex; flex-direction: column; justify-content: center; gap: 14px;
-    padding: 22px 20px; background: var(--card2); border: 1px solid var(--border);
-    border-radius: 12px; min-width: 0;
-  }
-  .calc-title { font-size: 14px; font-weight: 700; color: var(--text); }
-  .calc-formula { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .calc-formula b { color: var(--gold); }
-  .calc-meta { font-size: 12px; color: var(--muted); }
-  .calc-row { display: flex; gap: 10px; }
-  .calc-row input {
-    flex: 1; min-width: 0; background: var(--bg2); border: 1px solid var(--border); color: var(--text);
-    padding: 10px 12px; border-radius: 8px; font-size: 14px; outline: none; font-variant-numeric: tabular-nums;
-  }
-  .calc-row input:focus { border-color: var(--accent); }
-  .calc-row button {
-    background: var(--accent); color: #04121f; border: none; border-radius: 8px; padding: 0 16px;
-    font-size: 13.5px; font-weight: 700; cursor: pointer; transition: filter .15s; white-space: nowrap;
-  }
-  .calc-row button:hover { filter: brightness(1.12); }
-  .calc-result { font-size: 13px; color: var(--muted); }
-  .calc-result b { font-size: 30px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; margin: 0 6px 0 2px; }
-  .calc-result span { color: var(--muted); }
-  .calc-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
-
   #detailChart { height: 360px; width: 100%; }
   .detail-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
   .detail-meta b { color: var(--text); font-weight: 600; }
@@ -251,7 +223,6 @@
   @media (max-width: 900px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
     .grid { grid-template-columns: 1fr; }
-    .scatter-layout { grid-template-columns: 1fr; }
     .fitness-grid { grid-template-columns: 1fr; }
     #map { height: 420px; }
   }
@@ -328,22 +299,6 @@
       <div class="card"><div class="chart" id="cPaceZones"></div></div>
       <div class="card"><div class="chart" id="cPace"></div></div>
       <div class="card"><div class="chart" id="cHr"></div></div>
-      <div class="card full">
-        <div class="scatter-layout">
-          <div class="chart tall" id="cScatter"></div>
-          <div class="pace-calc">
-            <div class="calc-title">配速 → 心率 预测</div>
-            <div class="calc-formula" id="calcFormula">—</div>
-            <div class="calc-meta" id="calcMeta">y = 心率(bpm) · x = 配速(秒/km)</div>
-            <div class="calc-row">
-              <input id="calcPace" type="text" inputmode="numeric" placeholder="配速，如 5:30" autocomplete="off">
-              <button id="calcBtn" type="button">计算</button>
-            </div>
-            <div class="calc-result">预测心率<b id="calcResult">—</b><span>bpm</span></div>
-            <div class="calc-hint" id="calcHint">基于最近 30 次跑步的线性拟合</div>
-          </div>
-        </div>
-      </div>
       <div class="card full"><div class="chart tall" id="cCalendar"></div></div>
     </div>
   </section>
@@ -664,125 +619,6 @@ function renderHr() {
       { name: "移动平均", type: "line", data: ma, showSymbol: false, lineStyle: { width: 2.6, color: "#fbbf24", type: "dashed" } },
     ],
   });
-}
-
-let paceHrFit = null;
-
-function renderScatter() {
-  const c = initChart("cScatter");
-  // 最近 30 次跑步，逐点计算：滚动 60 秒平滑配速 × 该点心率（而非单次平均配速）
-  const recent = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).slice(-30);
-  const samples = [];
-  for (const a of recent) {
-    const t = tracks[a.file];
-    if (!t || !t.points || t.points.length < 2) continue;
-    const pts = t.points;
-    for (let i = 1; i < pts.length; i++) {
-      const tNow = pts[i][3];
-      let j = i - 1;
-      while (j > 0 && tNow - pts[j][3] < 60) j--;
-      const dt = tNow - pts[j][3];
-      if (dt <= 0) continue;
-      let dm = 0;
-      for (let k = j; k < i; k++) dm += haversine(pts[k], pts[k + 1]);
-      if (dm <= 0) continue;
-      const pace = dt / (dm / 1000); // 秒/公里
-      if (pace < 180 || pace > 900) continue;   // 过滤停表/异常段
-      const hr = pts[i][2];
-      if (hr == null || hr < 80 || hr > 220) continue;
-      samples.push([pace, hr]);
-    }
-  }
-  const data = samples;
-  // 线性回归：心率(y) = slope × 配速(x, 秒/km) + intercept
-  let fit = null;
-  if (samples.length >= 2) {
-    const n = samples.length;
-    const sx = samples.reduce((s, p) => s + p[0], 0);
-    const sy = samples.reduce((s, p) => s + p[1], 0);
-    const sxy = samples.reduce((s, p) => s + p[0] * p[1], 0);
-    const sxx = samples.reduce((s, p) => s + p[0] * p[0], 0);
-    const denom = n * sxx - sx * sx;
-    if (denom !== 0) {
-      const slope = (n * sxy - sx * sy) / denom;
-      const intercept = (sy - slope * sx) / n;
-      const yMean = sy / n;
-      const ssRes = samples.reduce((s, p) => { const e = p[1] - (slope * p[0] + intercept); return s + e * e; }, 0);
-      const ssTot = samples.reduce((s, p) => { const e = p[1] - yMean; return s + e * e; }, 0);
-      const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-      const xs = samples.map((p) => p[0]);
-      fit = { slope, intercept, r2, xMin: Math.min(...xs), xMax: Math.max(...xs) };
-    }
-  }
-  paceHrFit = fit;
-  const subtext = `最近 30 次跑步 · 逐点 60 秒平滑配速 × 心率 · ${samples.length} 个样本`;
-  const series = [{ name: "样本点", type: "scatter", data, symbolSize: 5, itemStyle: { color: "rgba(56,189,248,.35)", borderColor: "rgba(56,189,248,.55)", borderWidth: 0.5 }, z: 5 }];
-  const legendData = ["样本点"];
-  if (fit) {
-    legendData.push("线性拟合");
-    series.push({
-      name: "线性拟合", type: "line", silent: true,
-      data: [[fit.xMin, fit.slope * fit.xMin + fit.intercept], [fit.xMax, fit.slope * fit.xMax + fit.intercept]],
-      showSymbol: false, lineStyle: { color: "#fbbf24", width: 2, type: "dashed" }, z: 10,
-    });
-  }
-  c.setOption({
-    ...chartTheme,
-    title: { text: "配速 × 心率 相关性", subtext, left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm` },
-    legend: { data: legendData, top: 0, right: 0 },
-    grid: { left: 56, right: 24, top: 62, bottom: 48 },
-    xAxis: { type: "value", name: "配速", scale: true, ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
-    yAxis: { type: "value", name: "心率", scale: true, ...AXIS },
-    series,
-  });
-  renderPaceCalc(fit);
-  const calcInput = $("#calcPace"), calcBtn = $("#calcBtn");
-  if (calcInput && calcBtn) {
-    calcInput.addEventListener("input", computePaceHr);
-    calcInput.addEventListener("keydown", (e) => { if (e.key === "Enter") computePaceHr(); });
-    calcBtn.addEventListener("click", computePaceHr);
-  }
-}
-
-function renderPaceCalc(fit) {
-  const fEl = $("#calcFormula"), mEl = $("#calcMeta");
-  if (!fEl) return;
-  if (!fit) { fEl.textContent = "暂无可拟合数据"; if (mEl) mEl.textContent = ""; return; }
-  const b = fit.intercept;
-  const sign = b >= 0 ? "+" : "−";
-  fEl.innerHTML = `y = <b>${fit.slope.toFixed(3)}</b>·x ${sign} <b>${Math.abs(b).toFixed(1)}</b>`;
-  if (mEl) mEl.textContent = `y = 心率(bpm) · x = 配速(秒/km) · R² = ${fit.r2.toFixed(3)}`;
-}
-
-function parsePaceInput(s) {
-  s = String(s).trim();
-  if (!s) return null;
-  const hms = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/.exec(s);
-  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
-  const ms = /^(\d{1,2}):([0-5]?\d)$/.exec(s);
-  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
-  const num = /^\d+(\.\d+)?$/.exec(s);
-  if (num) return Number(num[1]);
-  return null;
-}
-
-function computePaceHr() {
-  const out = $("#calcResult"), hint = $("#calcHint");
-  if (!paceHrFit) {
-    if (out) out.textContent = "—";
-    if (hint) hint.textContent = "暂无可用的拟合公式";
-    return;
-  }
-  const sec = parsePaceInput($("#calcPace").value);
-  if (sec == null || sec <= 0) {
-    if (out) out.textContent = "—";
-    if (hint) hint.textContent = "请输入配速，如 5:30（或秒数 330）";
-    return;
-  }
-  const hr = paceHrFit.slope * sec + paceHrFit.intercept;
-  if (out) out.textContent = Math.round(hr);
-  if (hint) hint.textContent = `${fmtPace(sec)} /km → 约 ${Math.round(hr)} bpm（R² = ${paceHrFit.r2.toFixed(3)}，仅供参考）`;
 }
 
 function renderCalendar() {
@@ -1200,7 +1036,6 @@ function init() {
   safe("paceZones", renderPaceZones);
   safe("pace", renderPace);
   safe("hr", renderHr);
-  safe("scatter", renderScatter);
   safe("calendar", renderCalendar);
   safe("load", renderLoad);
   safe("hrv", renderHrv);
