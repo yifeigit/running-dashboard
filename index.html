@@ -299,9 +299,7 @@
       <div class="card"><div class="chart" id="cPaceZones"></div></div>
       <div class="card"><div class="chart" id="cPace"></div></div>
       <div class="card"><div class="chart" id="cHr"></div></div>
-      <div class="card full"><div class="chart tall" id="cHrZones"></div></div>
       <div class="card full"><div class="chart tall" id="cScatter"></div></div>
-      <div class="card full"><div class="chart tall" id="cWeekday"></div></div>
       <div class="card full"><div class="chart tall" id="cCalendar"></div></div>
     </div>
   </section>
@@ -624,50 +622,53 @@ function renderHr() {
   });
 }
 
-function renderHrZones() {
-  const c = initChart("cHrZones");
-  const hrMax = Math.max(...acts.filter((a) => a.maxHeartRate).map((a) => a.maxHeartRate), 0) || 193;
-  const zones = [
-    { name: "Z1 恢复", min: 0.50, max: 0.60, color: "#64748b" },
-    { name: "Z2 有氧基础", min: 0.60, max: 0.70, color: "#38bdf8" },
-    { name: "Z3 有氧耐力", min: 0.70, max: 0.80, color: "#2dd4bf" },
-    { name: "Z4 乳酸阈值", min: 0.80, max: 0.90, color: "#fbbf24" },
-    { name: "Z5 无氧/最大", min: 0.90, max: 1.00, color: "#f87171" },
-  ];
-  const counts = new Array(5).fill(0);
-  let total = 0;
-  for (const file in tracks) {
-    for (const p of tracks[file].points) {
-      const hr = p[2];
-      if (hr == null || hr <= 0) continue;
-      total++;
-      const f = hr / hrMax;
-      for (let i = 0; i < 5; i++) { if (f >= zones[i].min && f < zones[i].max) { counts[i]++; break; } }
-    }
-  }
-  const totalMin = Math.round(total / 60);
-  c.setOption({
-    ...chartTheme,
-    title: { text: "心率区间分布", subtext: `基于逐点心率 · 最大心率 ${hrMax} bpm · 累计 ${totalMin} 分钟`, left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${Math.round(v / 60)} 分钟` },
-    grid: { left: 60, right: 20, top: 74, bottom: 36 },
-    xAxis: { type: "category", data: zones.map((z) => z.name), ...AXIS },
-    yAxis: { type: "value", name: "分钟", ...AXIS, max: (v) => Math.round(v.max * 1.2), axisLabel: { color: "#8b98ab", formatter: (v) => Math.round(v / 60) } },
-    series: [{ name: "时长", type: "bar", data: counts, itemStyle: { color: (p) => zones[p.dataIndex].color, borderRadius: [3, 3, 0, 0] }, label: { show: true, position: "top", color: "#8b98ab", formatter: (p) => `${Math.round(p.value / 60)}m` } }],
-  });
-}
-
 function renderScatter() {
   const c = initChart("cScatter");
-  const data = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).map((a) => [a.avgPaceSecPerKm, a.avgHeartRate, a.distanceKm, a.date]);
+  const pts = acts.filter((a) => a.avgPaceSecPerKm && a.avgHeartRate).map((a) => ({ x: a.avgPaceSecPerKm, y: a.avgHeartRate, d: a.distanceKm, date: a.date }));
+  const data = pts.map((p) => [p.x, p.y, p.d, p.date]);
+  // 线性回归：心率 = slope × 配速(秒/km) + intercept
+  let fit = null;
+  if (pts.length >= 2) {
+    const n = pts.length;
+    const sx = pts.reduce((s, p) => s + p.x, 0);
+    const sy = pts.reduce((s, p) => s + p.y, 0);
+    const sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
+    const sxx = pts.reduce((s, p) => s + p.x * p.x, 0);
+    const denom = n * sxx - sx * sx;
+    if (denom !== 0) {
+      const slope = (n * sxy - sx * sy) / denom;
+      const intercept = (sy - slope * sx) / n;
+      const yMean = sy / n;
+      const ssRes = pts.reduce((s, p) => { const e = p.y - (slope * p.x + intercept); return s + e * e; }, 0);
+      const ssTot = pts.reduce((s, p) => { const e = p.y - yMean; return s + e * e; }, 0);
+      const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+      const xs = pts.map((p) => p.x);
+      fit = { slope, intercept, r2, xMin: Math.min(...xs), xMax: Math.max(...xs) };
+    }
+  }
+  let subtext = "气泡大小 = 距离";
+  const series = [{ name: "活动", type: "scatter", data, symbolSize: (v) => 6 + Math.min(22, v[2] * 2), itemStyle: { color: "rgba(56,189,248,.7)", borderColor: "#38bdf8" }, z: 5 }];
+  const legendData = ["活动"];
+  if (fit) {
+    const b = fit.intercept;
+    const sign = b >= 0 ? "+" : "−";
+    subtext = `气泡大小 = 距离 · 拟合 HR = ${fit.slope.toFixed(3)}×配速(秒/km) ${sign} ${Math.abs(b).toFixed(1)} · R² = ${fit.r2.toFixed(3)}`;
+    legendData.push("线性拟合");
+    series.push({
+      name: "线性拟合", type: "line", silent: true,
+      data: [[fit.xMin, fit.slope * fit.xMin + fit.intercept], [fit.xMax, fit.slope * fit.xMax + fit.intercept]],
+      showSymbol: false, lineStyle: { color: "#fbbf24", width: 2, type: "dashed" }, z: 10,
+    });
+  }
   c.setOption({
     ...chartTheme,
-    title: { text: "配速 × 心率 相关性", subtext: "气泡大小 = 距离", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
+    title: { text: "配速 × 心率 相关性", subtext, left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
     tooltip: { ...chartTheme.tooltip, formatter: (p) => `配速 ${fmtPace(p.value[0])} /km · 心率 ${p.value[1]} bpm<br/>距离 ${p.value[2].toFixed(2)} km · ${p.value[3]}` },
+    legend: { data: legendData, top: 0, right: 0 },
     grid: { left: 56, right: 24, top: 62, bottom: 48 },
     xAxis: { type: "value", name: "配速", ...AXIS, inverse: true, axisLabel: { color: "#8b98ab", formatter: (v) => fmtPace(v) } },
     yAxis: { type: "value", name: "心率", ...AXIS },
-    series: [{ name: "活动", type: "scatter", data, symbolSize: (v) => 6 + Math.min(22, v[2] * 2), itemStyle: { color: "rgba(56,189,248,.7)", borderColor: "#38bdf8" } }],
+    series,
   });
 }
 
@@ -685,35 +686,6 @@ function renderCalendar() {
       yearLabel: { show: true, color: "#8b98ab" }, monthLabel: { color: "#8b98ab" }, dayLabel: { color: "#8b98ab", firstDay: 1 },
     },
     series: [{ type: "heatmap", coordinateSystem: "calendar", data }],
-  });
-}
-
-function renderWeekday() {
-  const c = initChart("cWeekday");
-  const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-  const dist = new Array(7).fill(0);
-  const cnt = new Array(7).fill(0);
-  for (const a of acts) {
-    if (!a.date) continue;
-    const idx = (new Date(a.date + "T00:00:00").getDay() + 6) % 7;
-    dist[idx] += distKm(a);
-    cnt[idx] += 1;
-  }
-  c.setOption({
-    ...chartTheme,
-    title: { text: "周度训练分布", subtext: "柱 = 累计里程 · 线 = 次数（按星期几）", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v, si) => si === 0 ? `${v} km` : `${v} 次` },
-    legend: { data: ["里程 (km)", "次数"], top: 0, right: 0 },
-    grid: { left: 48, right: 48, top: 74, bottom: 36 },
-    xAxis: { type: "category", data: days, ...AXIS },
-    yAxis: [
-      { type: "value", name: "km", ...AXIS },
-      { type: "value", name: "次", ...AXIS, splitLine: { show: false } },
-    ],
-    series: [
-      { name: "里程 (km)", type: "bar", data: dist.map(round1), itemStyle: { color: "#38bdf8", borderRadius: [4, 4, 0, 0] } },
-      { name: "次数", type: "line", yAxisIndex: 1, data: cnt, showSymbol: true, symbolSize: 7, lineStyle: { color: "#fbbf24", width: 2 }, itemStyle: { color: "#fbbf24" } },
-    ],
   });
 }
 
@@ -823,7 +795,23 @@ function renderSleep() {
   c.setOption({
     ...chartTheme,
     title: { text: "睡眠结构", subtext: "近 30 天 · 柱=各阶段时长 · 线=睡眠分数", left: 0, textStyle: { color: "#e6edf3", fontSize: 15 }, subtextStyle: { color: "#8b98ab" } },
-    tooltip: { ...chartTheme.tooltip, trigger: "axis", valueFormatter: (v) => `${Math.round(v)} min` },
+    tooltip: {
+      ...chartTheme.tooltip, trigger: "axis",
+      formatter: (params) => {
+        const ps = Array.isArray(params) ? params : [params];
+        const idx = ps[0] ? ps[0].dataIndex : 0;
+        const rec = d[idx] || {};
+        let html = `<b>${rec.date ?? ""}</b><br/>`;
+        for (const p of ps) {
+          if (p.seriesName === "睡眠分数") continue;
+          html += `<span style="color:${p.color}">●</span> ${p.seriesName} <b>${Math.round(p.value)}</b> min<br/>`;
+        }
+        const scoreP = ps.find((p) => p.seriesName === "睡眠分数");
+        if (scoreP != null && Number.isFinite(scoreP.value)) html += `<span style="color:#fbbf24">★</span> 睡眠分数 <b>${scoreP.value}</b><br/>`;
+        if (rec.totalMinutes != null) html += `总时长 <b>${rec.totalMinutes}</b> min`;
+        return html;
+      },
+    },
     legend: { data: ["深睡", "浅睡", "REM", "清醒", "睡眠分数"], top: 0, right: 0 },
     grid: { left: 48, right: 56, top: 74, bottom: 40 },
     xAxis: { type: "category", data: dates, ...AXIS, axisLabel: { color: "#8b98ab", hideOverlap: true } },
@@ -1099,9 +1087,7 @@ function init() {
   safe("paceZones", renderPaceZones);
   safe("pace", renderPace);
   safe("hr", renderHr);
-  safe("hrZones", renderHrZones);
   safe("scatter", renderScatter);
-  safe("weekday", renderWeekday);
   safe("calendar", renderCalendar);
   safe("load", renderLoad);
   safe("hrv", renderHrv);
